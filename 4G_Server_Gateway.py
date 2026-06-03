@@ -12,6 +12,7 @@ import Logger
 import threading
 import http.client
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 # import utility
 #import df200
@@ -31,10 +32,13 @@ import df703
 
 port_number = 9000
 max_clients = 10
-attr_result = ""
-token_id = ""
+UPLOAD_HOST = "www.dingtek.com"
+UPLOAD_PORT = 6000
+UPLOAD_TIMEOUT_SECONDS = 10
+UPLOAD_WORKERS = 4
 clients = {}  # use dictionary to manage the sockets list with imei
 log = Logger.Logger("all.log", level="debug")
+upload_executor = ThreadPoolExecutor(max_workers=UPLOAD_WORKERS)
 
 
 # Func: upload data to thingsboard by http post
@@ -42,13 +46,14 @@ log = Logger.Logger("all.log", level="debug")
 #       token: token id
 # remark: use your application server and port to replace below domain name and port number YYYY
 def upload_data(attr, token):
+    conn = None
     try:
         # params = urllib.parse.urlencode(attr)
         print("try to upload data ")
         str_url = "/api/v1/" + token + "/telemetry"
         len_attr = len(attr)
         headers = {
-            "Host": "www.dingtek.com:YYYY",
+            "Host": str(UPLOAD_HOST) + ":" + str(UPLOAD_PORT),
             "User-Agent": "curl/7.55.1",
             "Accept-Language": "*/*",
             "Content-Type": "application/json",
@@ -57,20 +62,23 @@ def upload_data(attr, token):
         '''use your own http application domain name /ip/port replace below. of course if you use 
            other type application, please change to the corresponsing protocol.
         '''
-        conn = http.client.HTTPConnection("www.dingtek.com:6000", timeout=10)
+        conn = http.client.HTTPConnection(
+            UPLOAD_HOST, UPLOAD_PORT, timeout=UPLOAD_TIMEOUT_SECONDS
+        )
         conn.request("POST", str_url, attr, headers)
         r1 = conn.getresponse()
         print("response is ", str(r1.getcode()))
         log.logger.debug("upload_data: response is " + str(r1.getcode()))
         # 关闭连接
-        conn.close()
-        # print("close socket in upload_data")
-        log.logger.debug("upload_data: close socket in upload_data")
         # return 1
     except Exception as ex:
         print(ex)
         log.logger.exception("upload_data", ex)
     finally:
+        if conn:
+            conn.close()
+            # print("close socket in upload_data")
+            log.logger.debug("upload_data: close socket in upload_data")
         return 1
 
 
@@ -96,10 +104,9 @@ def handle_client(client, address):
         client.settimeout(10)
         # 超时时间
         request_bytes = b""
-        global attr_result
+        attr_result = ""
         request_str = ""
-        global token_id
-        global clients
+        token_id = ""
         find_result1 = -1
         while True:
             if not client._closed:
@@ -134,14 +141,14 @@ def handle_client(client, address):
         log.logger.debug("attr is"+attr_result+".token_id is "+token_id)
         if attr_result != "" and token_id != "":
             clients[token_id] = client
-            #upload_data(attr_result, token_id)
+            upload_executor.submit(upload_data, attr_result, token_id)
             #checking if the token_id included in the downlink command destination imei list. if yes, send downlink
             #downlink_command = downlink_destination.get[token_id]
             #if(downlink_command]!=None):
             #    client.send(downlink_command)
             #else:
             #    pass
-            log.logger.debug("after upload data ")
+            log.logger.debug("after submit upload data ")
             time.sleep(1)
             client.close()
             clients.pop(token_id,None)        
