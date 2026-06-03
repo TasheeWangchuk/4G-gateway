@@ -22,7 +22,7 @@ class DF703(object):
             if (data_len == len_content/ 2):
                 if (data_type == "01" or data_type == "02"):
                     if (data_len == 34):
-                        token_id = req_data[51:66]
+                        token_id = req_data[50:66]
                         data_height = int(req_data[10:14], 16)
                         data_temperature = int(req_data[16:18], 16)
                         data_angle = int(req_data[20:22], 16) if (int(req_data[18:20], 16) == 0) else (
@@ -52,7 +52,7 @@ class DF703(object):
                         }
                         attr_result = json.dumps(attribute)
                     else:
-                        token_id = req_data[67:82]
+                        token_id = req_data[66:82]
                         data_height = int(req_data[10:14], 16)
                         data_longitude_origin = req_data[16:24]
                         data_longitude = utility.IEEE754_Hex_To_Float(data_longitude_origin)
